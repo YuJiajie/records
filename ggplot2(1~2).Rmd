@@ -1,0 +1,200 @@
+# ggplot2 学习笔记
+> 这是一份用Rstudio+knitr+markdown 写的ggplot2学习笔记，参考书籍《ggplot2 Elegant Graphics for Data Analysis (use R)》第二版
+
+----------------------------------------------------
+## 2 Geting started with qplot  
+
+载入需要用到的包及diamonds数据集
+```{r }
+library(ggplot2)
+library(mgcv)
+library(knitr)
+data(diamonds)
+```
+
+全局设置
+```{r }
+## set global chunk options
+opts_chunk$set(fig.height=5,gif.width=5,fig.path='figure/manual-', cache.path='cache/manual-',fig.align='center', fig.show='hold',warming=F)
+## I use = but I can replace it with <-; set code/output width to be 68
+options(replace.assign=TRUE, width=68)
+
+```
+
+钩子函数集
+```{r message=FALSE}
+knit_hooks$set(twice=function(before, options, envir){
+  if(before) par(mfrow=c(1,2))
+})
+```
+
+设置随机数种子
+```{r}
+set.seed(1410)
+```
+
+随机选100条数据
+```{r }
+dsmall = diamonds[sample(nrow(diamonds), 100),] 
+head(dsmall)
+```
+------------------------------------------------------
+### 2.1 Basic plot  
+
+qplot是ggplot2里的基础绘图函数，可以指定data，这样可以不需要attach，就能从指定的data里找变量;而plot()没有data选项
+```{r }
+qplot(carat,price,data=diamonds)
+plot(diamonds$carat,diamonds$price,lwd=3,pch=16) 
+```
+
+通过data代替attach可以在在qplot里加入简单的表达式
+```{r }
+qplot(log(carat),log(price),data=dsmall)
+qplot(carat,x*y*z,data=dsmall) # 重量跟体积的关系图，通过data达到attach的功能，可以简洁的插入表达式
+```
+
+plot的表示则较为繁琐;重量VS体积
+```{r fig.width=10,twice=T}
+plot(diamonds$carat,diamonds$x*diamonds$y*diamonds$z,
+     xlab='weight',ylab='volume',main='is diamonds more weght with big?',text(.6,3500,'n=53940')) 
+plot(dsmall$carat,dsmall$x*dsmall$y*dsmall$z,
+     xlab='weight',ylab='volume',main='is diamonds more weght with big?',text(0.45,350,"n=100")) 
+```
+
+qplot里用注脚调用，还是需要用$，colour控制颜色，shape控制形状
+```{r}
+qplot(carat,price,data=dsmall[dsmall$color==c('H','D'),],color=color)
+qplot(carat,price,data=dsmall,shape=cut)
+```
+通过geom控制几何体;默认smooth为loess
+```{r}
+qplot(carat,price,data=diamonds,geom=c('point','smooth')) 
+qplot(carat,price,data=dsmall,geom=c('point','smooth'))    
+```
+
+通过method控制拟合方法；_formula没有弄清具体是什么？_；
+```{r}
+qplot(carat,price,data=dsmall,geom=c('point','smooth'),method='gam',formula=y~s(x))  # 拟合gam
+qplot(carat,price,data=dsmall,geom=c('point','smooth'),method='gam',formula=y~s(x,bs='cs')) # 大于1000个点时，bs='cs'是默认设置
+```
+
+拟合一般线性方程；第二个图加入了3次项;splines包可以拟合__bs__（Polynomial Splines）和__ns__（ natural cubic spline）
+```{r}
+library(splines)
+qplot(carat,price,data=dsmall,geom=c('point','smooth'),method='lm')
+qplot(carat,price,data=dsmall,geom=c('point','smooth'),method='lm',formula=y~poly(x,3))
+qplot(carat,price,data=dsmall,geom=c('point','smooth'),method='lm',formula=y~ns(x,5))
+```
+------------------------------------------------------
+### 2.2 Boxplot or jittered point
+> 
+
+箱须图
+```{r}
+qplot(color,price/carat,data=dsmall,geom='boxplot')
+```
+
+_颤点图_? alpha=I()控制图像的透明度
+```{r}
+qplot(color,price/carat,data=dsmall,geom='jitter',main="small dataset not show the pattern")
+qplot(color,price/carat,data=diamonds,geom='jitter',main="big dataset can see clear patern")
+qplot(color,price/carat,data=diamonds,geom='jitter',alpha=I(1/5),main="alpha=1/5")
+qplot(color,price/carat,data=diamonds,geom='jitter',alpha=I(1/50),main="alpha=1/50")
+```
+--------------------------------------------------------
+### 2.3 Histgram、density plots and bar plots
+> 直方图（histogram）和密度图（density）只展示单一变量的分布情况，对某一个特定组内，直方图（或密度图）比箱式图提供更多的信息，但是不同直方图（或密度图）之间的比较较困难；柱形图（bar plots)横坐标是分类变量，纵坐标默认是count，但是也可以是某个确定连续变量（如carat）
+
+geom_histogram的间断控制理解的不是很好，没能实现类似hist里的breaks的效果，而且qplot的在3carat附近的点都没有表现出来；colour是描边的，fill是填充
+```{r warning=FALSE}
+qplot(carat,data=diamonds,geom="histogram",binwidth=0.007,xlim=c(0,3),colour=color)
+qplot(carat,data=diamonds,geom="histogram",binwidth=0.007,xlim=c(0,3),ylim=c(0,2700),fill=color)
+hist(diamonds$carat,breaks=53940,xlim=c(0,5))
+```
+
+density初看很直观，但是其实并不好理解，因为密度的具体意义不明；要求数据是无限的、连续的、平滑的。没有去细看lattice或base里的了
+```{r}
+qplot(carat,data=diamonds,geom="density",color=color)
+```
+
+柱形图是离散的直方图，说明直方图的x轴是连续的，而柱形图是离散的;纵坐标可以是用连续变量carat加权，表示某一颜色下carat的和（summing up）
+```{r}
+qplot(color,data=diamonds,geom='bar')
+qplot(color,data=diamonds,geom="bar",weight=carat)+scale_y_continuous("carat")
+```
+-----------------------------------------------------------
+### 2.4 Time series with line and path plots
+
+线图和通经图都是用线将点连起来，但是通径图有一定的连接规则（是由另一个变量决定），反映的事两个变量随时间变化同时的变化，如失业数和失业率之间的一个变化（有点别扭的理解？可能要看通经分析才能懂）  
+__line plot__
+```{r}
+data(economics) # unempmed median number of weeks unemployed
+economics$date <- as.Date(economics$date)
+qplot(date,uempmed,data=economics,geom="line")
+qplot(date,unemploy/pop,data=economics,geom="line")
+```
+__path plot__ 看？scale_size_area 将取值范围内的点按比例的数值化？
+```{r}
+year<-function(x) as.POSIXlt(x)$year+1900  # ?as.POSIXlt 可以得到x日期的年份
+qplot(unemploy/pop,uempmed,data=economics,geom=c("point","path"))
+qplot(unemploy/pop,uempmed,data=economics,geom="path",colour=year(date))+scale_size_area()
+```
+----------------------------------------------------------
+### 2.5 Faceting 
+
+这个的展示性其实很强，这一章只做一简要说明，没有细讲（第7章），到时再添到此处。facet是ggplot2里的一种展示方式，可以翻译为“切面”，它可做出一个变量内，分类展示另一变量的变化情况的图（row.var~.;col.var~.也可以是多个），也可叫做格子图或分类面板图。每一层内的切面面板可以有独立的数据集
+```{r message=FALSE}
+qplot(carat,price,data=diamonds,facets=color~.,geom=c('point','smooth')) # row.var
+qplot(carat,price,data=diamonds,facets=.~color,geom=c('point','smooth')) # col.var
+qplot(carat,price,data=diamonds)+facet_wrap(~color) +geom_smooth()       # Trellis like
+qplot(carat,..density..,data=diamonds,facets=color~.,geom="histogram",binwidth=0.1,xlim=c(0,3))
+```
+-----------------------------------------------------------
+### 2.6 总结：qplot与plot的区别
+  
+qplot（）不是类函数，它不能不能直接用r里面的任何对象，ggplot（）是类函数；在qplot里要自己定义颜色或形状，要用I（），如color=I（"red"）;图形美观属性控制的的名称有所区别col-colour,pch-shape,cex-size 等）；ggplot2最大的特点就是图层结构绘图，你可以往上面叠加图层。
+  
+------------------------------------------------------------
+ 
+## 3 Matering the grammar
+> 这章介绍ggplot 的语法特点及理论基础。图层绘图的特点使ggplot的语法灵活易学。
+
+------------------------------------------------------------
+### 3.1 learn __fuel economy data__
+__data(mpg)__记录了1999-2008年美国汽车的一些数据，包括制造商，模型，汽车分级，引擎排量、大小，城市和高速公路的每英里耗油量和气缸数。用data(package='ggplot2')查看特定包的数据集
+
+__layers:__ 负责展示在一幅图上能看到的东西
+ - 数据和美化
+ - 统计变换
+ - 几何体
+ - 位置变换
+
+__scales：__标度。掌管数据和美化属性之间的转换，坐标轴的标尺、位置、颜色；坐标系统（笛卡尔坐标，极点坐标系，球形投影）；
+
+__coordinate system:__ 掌管图上对象的位置  
+
+__faceting:__ 切面，展示不同子集的情况   
+
+__geom:__geometric objects；控制图的形状，可控制type，colour，size，以及扩展特殊要求的形状
+__stat:__ 统计变换  
+__position asjustment:__ 处理图形结构覆盖的情况
+
+-----------------------------------------------------------
+### 数据结构(data structrues)
+
+1. 循环中通过print()展示结果；
+2. summary()可以简单查看图形的属性；
+```{r}
+y <- qplot(date,uempmed,data=economics,geom="line")
+summary(y)
+```
+3. ggsave()可以在硬盘上展示结果（8.3）
+```{r}
+ggsave("d:/r/training/y.png",width=5,height=5)
+```
+4. save（）可以将缓存保存下来,可以通过load（）再导进来
+```{r echo=FALSE}
+save(y,file="d:/r/training/ploty.rdata")
+load('d:/r/training/ploty.rdata')
+```
+---------------------------------------------------------
