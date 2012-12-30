@@ -1,4 +1,4 @@
 records
 =======
 
-This content record some code during learning R。 
+This repository store some code during learning R。 
